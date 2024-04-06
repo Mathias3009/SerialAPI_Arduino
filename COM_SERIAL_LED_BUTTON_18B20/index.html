@@ -1,0 +1,303 @@
+<!doctype html>
+<html>
+<head>
+	<meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>Web based Serial Terminal</title>
+	<link rel="stylesheet" href="jquery-ui.css">
+    <link href="https://fonts.cdnfonts.com/css/digital-7-mono" rel="stylesheet">
+	<script src="https://ajax.googleapis.com/ajax/libs/jquery/3.7.1/jquery.min.js"></script>
+	
+	<link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+	<!-- Compiled and minified CSS -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/css/materialize.min.css">
+    <link rel="stylesheet" href="https://cdn.metroui.org.ua/current/metro.css">
+    <!-- Compiled and minified JavaScript -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/js/materialize.min.js"></script>
+                   
+	<style>
+	body{
+		text-align:center;
+	}
+	/*-------------------*/
+	.grid-containerNew {
+	  margin:auto;
+	  display: grid;
+	  grid-template-columns: auto;
+	  gap: 10px;
+	  background-image: linear-gradient(gray, #5c759e);
+	  padding: 10px;
+	  width:200px;
+	  border-radius:10px;
+	  font-family: 'Digital-7 Mono', sans-serif;
+	  justify-content:center;
+	}
+	
+	.grid-container {
+	  margin:auto;
+	  display: grid;
+	  grid-template-columns: auto auto auto auto;
+	  gap: 10px;
+	  background-image: linear-gradient(gray, #5c759e);
+	  padding: 10px;
+	  width:800px;
+	  border-radius:10px;
+	}
+	
+	.grid-container > div {
+	  background-color: black;
+	  border: 1px solid black;
+	  text-align: center;
+	  font-size: 40px;
+	  color:#18F7E8;
+	  max-width:150px;
+	  font-family: 'Digital-7 Mono', sans-serif;
+	  padding:15px;
+	}
+  </style>        
+   
+</head>
+<body>
+	<div style="display:inline-block; vertical-align:top;">
+		<h5>Baud Rate: 
+			<select style='width:200px;margin:auto' class="browser-default" name="speed" id="SerialSpeed">
+			  <option value="1200">1200</option>
+			  <option value="2400">2400</option>
+			  <option value="4800">4800</option>
+			  <option value="9600">9600</option>
+			  <option value="19200">19200</option>
+			  <option value="38400">38400</option>
+			  <option value="57600">57600</option>
+			  <option value="115200">115200</option>
+			</select><br>
+			<button id="SerialConnectButton" type="button" class="btn btn-success" disabled>Connect</button>
+		</h5>
+		
+		<h2>Arduino</h2>
+		
+		<p>Cor display: <input onchange='setColor(this.value)' type='color' style='width:100px' value="#e66465" id='cl'></p>
+		<br><br>
+		<h4>Bytes Recebidos [0]led1 [1]led2 [2]button [3]temperatura</h4>
+		<p style='color:gray;' id='time'></p>
+		<div id='view'></div>
+		<h4>Temperatura(18B20)-byte[3]</h4>
+		<div class='grid-containerNew'>
+			<div id="donut1" data-role="donut" data-value="0"
+			data-hole=".6" data-font-size='40' data-color="#084240" data-background="transparent" data-stroke="white" data-fill="#1eb0a9"
+			data-animate="10" data-size="150">
+			</div>
+		</div>
+		<br>
+		<button onclick='setLed(1,1)' style='background-color:green' class="btn waves-effect waves-light" name="action">Ligar LED 1
+			<i class="material-icons right">send</i>
+		</button>
+		<button onclick='setLed(1,0)' style='background-color:orangered' class="btn waves-effect waves-light" name="action">Desl. LED 1
+			<i class="material-icons right">send</i>
+		</button>
+		<br><br>
+		<button onclick='setLed(2,1)' style='background-color:green' class="btn waves-effect waves-light" name="action">Ligar LED 2
+			<i class="material-icons right">send</i>
+		</button>
+		<button onclick='setLed(2,0)' style='background-color:orangered' class="btn waves-effect waves-light" name="action">Desl. LED 2
+			<i class="material-icons right">send</i>
+		</button>
+		<br>
+		<br>
+		<br>
+	</div>
+	<script>
+	//////////////////////////////-UI-------------------------
+	let colorNow="#18F7E8";
+	function setColor(value){
+		colorNow=value;
+		for(let i=0;i<140;i++){
+			document.getElementById("t"+i).style.color=value;
+		}
+	}
+	function onCreateView(){
+		let str="";
+		let inc=0;
+		for(x=0;x<1;x++){
+			str+="<div id='segmentDec' class='grid-container'>";
+			for(y=0;y<4;y++){
+				str+="<div id='t"+inc+"'>0</div>";
+				inc++;
+			}
+			str+="</div><br>";
+		}
+		document.getElementById("view").innerHTML=str;
+	}
+	onCreateView();
+	
+	//////////////////-------------SERIAL--------------------
+    var myTimeout;
+	var bufferSys={
+		bytes:[],
+		index:0
+	};
+
+	const connectButton = document.getElementById ('SerialConnectButton');
+	let port;
+	/*setInterval(function(){
+		if (port){
+			sendBuff([201]);
+			console.log("send");
+		}
+	}, 
+	10000);*/
+	if ('serial' in navigator) {
+	  connectButton.addEventListener('click', function () {
+		if (port) {
+		  port.close();
+		  port = undefined;
+		  connectButton.innerText = 'Connect';
+		  document.getElementById('SerialSpeed').disabled = false;
+
+		}
+		else {
+		  connectButton.innerText = 'Disconnect';
+		  getReader();
+		}
+	  });
+	  connectButton.disabled = false;
+	}
+	else {
+	  const error = document.createElement('p');
+	  error.innerHTML = '<p>Support for Serial Web API not enabled. Please enable it using chrome://flags/ and enable Experimental Web Platform fetures</p>';
+	}
+
+
+	let lineBuffer = '';
+	let latestValue = 0;
+
+    //---WRITE [ASCII] SERIAL-----
+	async function serialPrint(data) {
+	    console.log("%c---TX---","color:blue");
+		encoder = new TextEncoder();
+		const dataArrayBuffer = encoder.encode(data);
+
+		if (port && port.writable) {
+			const writer = port.writable.getWriter();
+			writer.write(dataArrayBuffer);
+			writer.releaseLock();
+		}
+	}
+	
+	//---WRITE [BYTE] SERIAL-----
+	async function serialWrite(buff,len) {
+		console.log("%c---TX---","color:blue");
+		let data="";
+		for(let i=0;i<len;i++)data+="1";
+		encoder = new TextEncoder();
+		const dataArrayBuffer = encoder.encode(data);
+		if (port && port.writable) {
+			const writer = port.writable.getWriter();
+			for(let i=0;i<len;i++){
+				dataArrayBuffer[i]=buff[i];
+			}
+			console.log(dataArrayBuffer);
+			writer.write(dataArrayBuffer);
+			writer.releaseLock();
+		}
+	}
+       
+	 
+	//---INIT SERIAL-----
+	async function getReader() {
+		port = await navigator.serial.requestPort({});
+		var e = document.getElementById("SerialSpeed");
+		var strSpd = e.options[e.selectedIndex].value;
+		var speed = parseInt(strSpd);
+		await port.open({ baudRate: [speed] });
+		document.getElementById('SerialSpeed').disabled = true;
+		connectButton.innerText = 'Disconnect';
+		
+		//---READ [BYTE] SERIAL-----
+		if(port.readable){
+			while (port.readable) {
+				const reader = port.readable.getReader();
+				try {
+					while (true) {
+						const { value, done } = await reader.read();
+						if (done) {
+							break;
+						}
+						//console.log("%c---RX---","color:green");
+						//console.log(value);
+						bufferReceived(value,100);
+					}
+				} catch (error) {
+					console.error("Erro ao ler da porta serial: ", error);
+				} finally {
+					reader.releaseLock();
+				}
+			}
+			
+		}
+	}
+	 function renderBufferRx(){
+		console.log(bufferSys.bytes);
+		//-------------bytes---
+		for(let x=0;x<bufferSys.index;x++){
+			document.getElementById("t"+x).innerHTML=bufferSys.bytes[x];
+		}
+		/////////----donut--
+		var donut = Metro.getPlugin('#donut1','donut');
+        donut.val(bufferSys.bytes[3]);
+		///-----print dateTime last update---
+		printDateTime();
+		//-----Clear buffer----
+		bufferSys.index=0;
+		bufferSys.bytes=[];
+	 }
+
+	let t;
+	//--------Print readSerial----
+	function bufferReceived(arrayBytes,silenceTimeout){
+	    ///-----Processamento de lotes----
+		for(value of arrayBytes){
+			bufferSys.bytes[bufferSys.index++]=value;
+		}
+		clearTimeout(t);
+		t = setTimeout(renderBufferRx,silenceTimeout);
+	}
+	
+	
+	//-------Serial Write-------	  
+	function sendBuff(buffAux){
+		if(port){
+			let buff=buffAux;
+			serialWrite(buff,buff.length);
+		}
+		else{
+			alert("Abra porta serial");
+		}
+	}
+	//-------Setled-------
+	function setLed(led,state){
+		if(port){
+			let buff=[led,state];
+			serialWrite(buff,buff.length);
+		}
+		else{
+			alert("Abra porta serial");
+		}
+	}
+	///-------print data--
+	function printDateTime(){
+		let agora = new Date();
+		let opcoes = { year: 'numeric', month: 'long', day: 'numeric', hour: 'numeric', minute: 'numeric', second: 'numeric' };
+		document.getElementById("time").innerHTML="Data e hora atual: " + agora.toLocaleDateString('pt-BR', opcoes);
+		document.getElementById("time").style.color="blue";
+		setTimeout(function(){document.getElementById("time").style.color="gray";}, 1000);
+	
+	}
+	</script>
+	
+	<script src="https://code.jquery.com/jquery-3.6.0.js"></script>
+	<script src="https://code.jquery.com/ui/1.13.2/jquery-ui.js"></script>
+	<script src="https://cdn.metroui.org.ua/current/metro.js"></script>
+	
+	</body>
+</html>
+
